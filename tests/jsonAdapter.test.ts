@@ -24,6 +24,31 @@ describe("JsonFileAdapter", () => {
     expect(data["2024-01-01"]).toBe(1);
   });
 
+  it("creates missing parent directories", async () => {
+    const nested = path.join(tmpDir, "data", "nested", "votes.json");
+    const adapter = new JsonFileAdapter(nested);
+    await adapter.increment("2024-01-01");
+
+    const counts = await adapter.getRange("2024-01-01", "2024-01-01");
+    expect(counts["2024-01-01"]).toBe(1);
+  });
+
+  it("recovers the write queue after a failed write", async () => {
+    const blocker = path.join(tmpDir, "blocker");
+    await fs.writeFile(blocker, "not a directory", "utf8");
+
+    const adapter = new JsonFileAdapter(path.join(blocker, "votes.json"));
+    await expect(adapter.increment("2024-01-01")).rejects.toBeTruthy();
+
+    // Remove the cause of the failure; the next increment must retry rather
+    // than inherit the rejected write-queue promise forever.
+    await fs.rm(blocker, { force: true });
+    await adapter.increment("2024-01-02");
+
+    const counts = await adapter.getRange("2024-01-02", "2024-01-02");
+    expect(counts["2024-01-02"]).toBe(1);
+  });
+
   it("accumulates votes for the same day", async () => {
     const adapter = new JsonFileAdapter(filePath);
     await adapter.increment("2024-01-01");
@@ -104,4 +129,3 @@ describe("JsonFileAdapter", () => {
     expect(files.some((f) => f.endsWith(".tmp"))).toBe(false);
   });
 });
-

@@ -10,11 +10,12 @@ import { dateRange } from "./types.js";
 export class MemoryAdapter implements StorageAdapter {
   private readonly counts = new Map<string, number>();
 
-  async increment(date: string, by = 1): Promise<void> {
+  increment(date: string, by = 1): Promise<void> {
     this.counts.set(date, (this.counts.get(date) ?? 0) + by);
+    return Promise.resolve();
   }
 
-  async getRange(from: string, to: string): Promise<Record<string, number>> {
+  getRange(from: string, to: string): Promise<Record<string, number>> {
     const result: Record<string, number> = {};
     for (const date of dateRange(from, to)) {
       const n = this.counts.get(date);
@@ -22,7 +23,7 @@ export class MemoryAdapter implements StorageAdapter {
         result[date] = n;
       }
     }
-    return result;
+    return Promise.resolve(result);
   }
 
   /** Reset all counts (useful in tests). */
@@ -30,4 +31,3 @@ export class MemoryAdapter implements StorageAdapter {
     this.counts.clear();
   }
 }
-

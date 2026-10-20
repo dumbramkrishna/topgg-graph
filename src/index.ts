@@ -5,19 +5,25 @@
  * Named exports: everything consumers might need individually.
  */
 
-import { utcDateString } from "./storage/types.js";
+import { utcDateString, parseDateString } from "./storage/types.js";
 import type { StorageAdapter } from "./storage/types.js";
 import { MemoryAdapter } from "./storage/memory.js";
 import { createWebhookHandler } from "./webhook.js";
-import type { WebhookOptions, WebhookRequest, WebhookResponse, TopggVotePayload } from "./webhook.js";
-import { renderSVG } from "./render.js";
-import type { RenderOptions, Theme, CustomTheme } from "./render.js";
+import type {
+  WebhookOptions,
+  WebhookRequest,
+  WebhookResponse,
+  WebhookHandler,
+  TopggVotePayload,
+} from "./webhook.js";
+import { renderSVG, getRenderWindow, DEFAULT_WEEKS } from "./render.js";
+import type { RenderOptions, RenderWindow, Theme, CustomTheme } from "./render.js";
 import { renderPNG } from "./png.js";
 
 export { MemoryAdapter } from "./storage/memory.js";
 export { JsonFileAdapter } from "./storage/jsonFile.js";
 export { createWebhookHandler } from "./webhook.js";
-export { renderSVG, colorLevel, sortedNonzero } from "./render.js";
+export { renderSVG, colorLevel, sortedNonzero, getRenderWindow } from "./render.js";
 export { renderPNG } from "./png.js";
 export { utcDateString, parseDateString, nextDateString, dateRange } from "./storage/types.js";
 export type {
@@ -25,8 +31,10 @@ export type {
   WebhookOptions,
   WebhookRequest,
   WebhookResponse,
+  WebhookHandler,
   TopggVotePayload,
   RenderOptions,
+  RenderWindow,
   Theme,
   CustomTheme,
 };
@@ -85,7 +93,9 @@ export class TopggGraph {
    * Create a webhook handler.
    * Requires `webhookAuth` to be set in the constructor options.
    */
-  webhook(opts: Omit<WebhookOptions, "auth" | "storage"> = {}): (req: WebhookRequest, res: WebhookResponse) => Promise<void> {
+  webhook(
+    opts: Omit<WebhookOptions, "auth" | "storage"> = {},
+  ): (req: WebhookRequest, res: WebhookResponse) => Promise<void> {
     if (!this._auth) {
       throw new Error(
         "[topgg-graph] webhookAuth is required to use webhook(). " +
@@ -102,30 +112,40 @@ export class TopggGraph {
    * @param by   - number of votes to add (default: 1)
    */
   async record(date?: string, by = 1): Promise<void> {
-    await this._storage.increment(date ?? utcDateString(), by);
+    const dateStr = date ?? utcDateString();
+    parseDateString(dateStr);
+    if (!Number.isFinite(by)) {
+      throw new RangeError("[topgg-graph] by must be a finite number.");
+    }
+    await this._storage.increment(dateStr, by);
   }
 
   /**
    * Retrieve raw daily counts for a UTC date range.
    *
-   * @param from - YYYY-MM-DD (default: 364 days ago)
+   * @param from - YYYY-MM-DD (default: 364 days before `to`)
    * @param to   - YYYY-MM-DD (default: today)
    */
   async getCounts(from?: string, to?: string): Promise<Record<string, number>> {
     const toDate = to ?? utcDateString();
-    const fromDate = from ?? (() => {
-      const d = new Date(Date.now() - 364 * 24 * 60 * 60 * 1000);
-      return utcDateString(d.getTime());
-    })();
+    const toDateMs = parseDateString(toDate).getTime();
+    const fromDate = from ?? utcDateString(toDateMs - 364 * 24 * 60 * 60 * 1000);
+    parseDateString(fromDate);
     return this._storage.getRange(fromDate, toDate);
   }
 
   /**
    * Render the vote heatmap as an SVG string.
+   *
+   * The storage query is aligned with the rendered grid, including `weeks`
+   * and the optional `today` override.
    */
   async render(opts: RenderOptions = {}): Promise<string> {
-    const counts = await this.getCounts(opts.today ? undefined : undefined);
-    return renderSVG(counts, opts);
+    const today = opts.today ?? utcDateString();
+    const weeks = opts.weeks ?? DEFAULT_WEEKS;
+    const { start, end } = getRenderWindow(today, weeks);
+    const counts = await this.getCounts(start, end);
+    return renderSVG(counts, { ...opts, today });
   }
 
   /**

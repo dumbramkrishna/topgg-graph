@@ -8,9 +8,11 @@
  * Wed, Fri) appear to the left.  A "Less … More" legend sits below.  A title
  * showing total votes appears above everything.
  *
- * Color levels: 0 = empty, 1–5 derived from quartiles of nonzero counts.
+ * Color levels: 0 = empty, 1–5 derived from quintiles of nonzero counts.
  * Default accent: Top.gg pink-red #ff3366.
  */
+
+import { parseDateString, utcDateString } from "./storage/types.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -19,6 +21,8 @@
 export interface CustomTheme {
   background: string;
   text: string;
+  /** Optional color for zero-vote cells. Defaults to #cccccc. */
+  empty?: string;
   /** Exactly 5 colors, index 0 = lowest nonzero, index 4 = highest. */
   levels: [string, string, string, string, string];
 }
@@ -91,32 +95,44 @@ function resolveTheme(theme: Theme | undefined): ResolvedTheme {
   return {
     background: theme.background,
     text: theme.text,
-    empty: "#cccccc",
+    empty: theme.empty ?? "#cccccc",
     levels: theme.levels,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Color level logic — quartile-based
+// Color level logic — quintile-based
 // ---------------------------------------------------------------------------
+
+/** Index of the value at the given quantile in a sorted array. */
+function quantileIndex(length: number, fraction: number): number {
+  return Math.min(length - 1, Math.max(0, Math.ceil(length * fraction) - 1));
+}
 
 /**
  * Assign a color level (0–5) to a count.
- * 0 = no votes.  1–5 derived from sorted nonzero quartile boundaries.
+ * 0 = no votes.  1–5 derived from sorted nonzero quintile boundaries.
  *
- * @param count  - the day's count (0 means empty)
- * @param nonzero - sorted list of all nonzero values in the dataset
+ * The quintile boundaries deliberately leave the maximum value in level 5
+ * while ensuring level 4 is reachable for datasets with at least five distinct
+ * nonzero values.
+ *
+ * @param count   - the day's count (0 means empty)
+ * @param nonzero - sorted ascending list of all nonzero values in the dataset
  */
 export function colorLevel(count: number, nonzero: readonly number[]): 0 | 1 | 2 | 3 | 4 | 5 {
   if (count <= 0 || nonzero.length === 0) return 0;
   const n = nonzero.length;
-  // Quartile boundaries (inclusive upper bound of each quarter)
-  const q1 = nonzero[Math.floor(n * 0.25)] ?? nonzero[n - 1]!;
-  const q2 = nonzero[Math.floor(n * 0.5)] ?? nonzero[n - 1]!;
-  const q3 = nonzero[Math.floor(n * 0.75)] ?? nonzero[n - 1]!;
-  const max = nonzero[n - 1]!;
+  // Last element is always defined because we checked length > 0 above.
+  // Using a fallback of 0 to avoid non-null assertions; it can never be reached.
+  const last = nonzero[n - 1] ?? 0;
+  const q1 = nonzero[quantileIndex(n, 0.2)] ?? last;
+  const q2 = nonzero[quantileIndex(n, 0.4)] ?? last;
+  const q3 = nonzero[quantileIndex(n, 0.6)] ?? last;
+  const q4 = nonzero[quantileIndex(n, 0.8)] ?? last;
 
-  if (count >= max) return 5;
+  // The top quintile and every equal-to-max value map to level 5.
+  if (count > q4 || count >= last) return 5;
   if (count <= q1) return 1;
   if (count <= q2) return 2;
   if (count <= q3) return 3;
@@ -151,6 +167,38 @@ function addDays(dateStr: string, n: number): string {
   return isoDate(d);
 }
 
+/** Default number of weeks rendered by `renderSVG`. */
+export const DEFAULT_WEEKS = 52;
+
+export interface RenderWindow {
+  /** First date shown in the grid (a Sunday). */
+  start: string;
+  /** Last date shown in the grid (a Saturday). */
+  end: string;
+}
+
+/**
+ * Compute the inclusive date window displayed by a heatmap.
+ *
+ * The window always ends on the Saturday of the week containing `todayStr`
+ * and spans exactly `weeks` columns.
+ */
+export function getRenderWindow(todayStr: string, weeks: number): RenderWindow {
+  if (!Number.isInteger(weeks) || weeks < 1) {
+    throw new RangeError("[topgg-graph] weeks must be a positive integer.");
+  }
+
+  // Validates both the format and that the calendar date actually exists.
+  const today = parseDateString(todayStr);
+  const normalizedToday = utcDateString(today.getTime());
+  const weekStart = startOfWeek(normalizedToday);
+
+  return {
+    start: addDays(weekStart, -(weeks - 1) * 7),
+    end: addDays(weekStart, 6),
+  };
+}
+
 /** YYYY-MM-DD → short month name */
 function monthName(dateStr: string): string {
   return new Date(`${dateStr}T00:00:00.000Z`).toLocaleString("en-US", {
@@ -162,6 +210,11 @@ function monthName(dateStr: string): string {
 // ---------------------------------------------------------------------------
 // SVG helpers
 // ---------------------------------------------------------------------------
+
+/** Convert a number to a string for safe use in SVG attribute template literals. */
+function n(v: number): string {
+  return String(v);
+}
 
 function escapeXml(s: string): string {
   return s
@@ -181,14 +234,14 @@ function rect(
   title?: string,
 ): string {
   const t = title ? `<title>${escapeXml(title)}</title>` : "";
-  return `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${escapeXml(fill)}" rx="${rx}" ry="${rx}">${t}</rect>`;
+  return `<rect x="${n(x)}" y="${n(y)}" width="${n(size)}" height="${n(size)}" fill="${escapeXml(fill)}" rx="${n(rx)}" ry="${n(rx)}">${t}</rect>`;
 }
 
 // ---------------------------------------------------------------------------
 // Main renderer
 // ---------------------------------------------------------------------------
 
-const DAY_LABELS: Array<{ row: number; label: string }> = [
+const DAY_LABELS: { row: number; label: string }[] = [
   { row: 1, label: "Mon" },
   { row: 3, label: "Wed" },
   { row: 5, label: "Fri" },
@@ -206,26 +259,33 @@ export function renderSVG(
   counts: Readonly<Record<string, number>>,
   options: RenderOptions = {},
 ): string {
-  const {
-    weeks = 52,
-    cellSize = 11,
-    gap = 2,
-    radius = 2,
-    theme,
-    today,
-  } = options;
+  const { weeks = DEFAULT_WEEKS, cellSize = 11, gap = 2, radius = 2, theme, today } = options;
+
+  if (!Number.isFinite(cellSize) || cellSize <= 0) {
+    throw new RangeError("[topgg-graph] cellSize must be a positive number.");
+  }
+  if (!Number.isFinite(gap) || gap < 0) {
+    throw new RangeError("[topgg-graph] gap must be a non-negative number.");
+  }
+  if (!Number.isFinite(radius) || radius < 0) {
+    throw new RangeError("[topgg-graph] radius must be a non-negative number.");
+  }
 
   const title = options.title ?? "Vote activity";
-
   const resolved = resolveTheme(theme);
-  const nonzero = sortedNonzero(counts);
-  const totalVotes = Object.values(counts).reduce((s, v) => s + v, 0);
 
   // ---- Compute grid start/end ----
-  const todayStr = today ?? isoDate(new Date());
-  const gridEndSunday = startOfWeek(todayStr); // start of this week (Sunday)
-  const gridEnd = addDays(gridEndSunday, 6); // Saturday of this week
-  const gridStart = addDays(gridEndSunday, -(weeks - 1) * 7); // Sunday N-1 weeks ago
+  const todayStr = today ?? utcDateString();
+  const { start: gridStart, end: gridEnd } = getRenderWindow(todayStr, weeks);
+
+  // Only counts inside the displayed window affect totals, colors, and cells.
+  const visibleCounts: Record<string, number> = {};
+  for (const [date, count] of Object.entries(counts)) {
+    if (date >= gridStart && date <= gridEnd) visibleCounts[date] = count;
+  }
+
+  const nonzero = sortedNonzero(visibleCounts);
+  const totalVotes = Object.values(visibleCounts).reduce((sum, value) => sum + value, 0);
 
   // ---- Layout constants ----
   const step = cellSize + gap;
@@ -241,16 +301,16 @@ export function renderSVG(
 
   // ---- SVG header ----
   parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" role="img" aria-label="${escapeXml(title)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${n(svgW)}" height="${n(svgH)}" viewBox="0 0 ${n(svgW)} ${n(svgH)}" role="img" aria-label="${escapeXml(title)}">`,
   );
   parts.push(
-    `<rect width="${svgW}" height="${svgH}" fill="${escapeXml(resolved.background)}" rx="6"/>`,
+    `<rect width="${n(svgW)}" height="${n(svgH)}" fill="${escapeXml(resolved.background)}" rx="6"/>`,
   );
 
   // ---- Title ----
   const titleText = `${escapeXml(title)} — ${totalVotes.toLocaleString("en-US")} total`;
   parts.push(
-    `<text x="${leftPad}" y="14" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="600" fill="${escapeXml(resolved.text)}">${titleText}</text>`,
+    `<text x="${n(leftPad)}" y="14" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="600" fill="${escapeXml(resolved.text)}">${titleText}</text>`,
   );
 
   // ---- Month labels ----
@@ -262,7 +322,7 @@ export function renderSVG(
       lastMonth = mon;
       const x = leftPad + w * step;
       parts.push(
-        `<text x="${x}" y="27" font-family="system-ui,-apple-system,sans-serif" font-size="9" fill="${escapeXml(resolved.text)}">${escapeXml(mon)}</text>`,
+        `<text x="${n(x)}" y="27" font-family="system-ui,-apple-system,sans-serif" font-size="9" fill="${escapeXml(resolved.text)}">${escapeXml(mon)}</text>`,
       );
     }
   }
@@ -271,7 +331,7 @@ export function renderSVG(
   for (const { row, label } of DAY_LABELS) {
     const y = topPad + row * step + cellSize - 1;
     parts.push(
-      `<text x="0" y="${y}" font-family="system-ui,-apple-system,sans-serif" font-size="9" fill="${escapeXml(resolved.text)}">${escapeXml(label)}</text>`,
+      `<text x="0" y="${n(y)}" font-family="system-ui,-apple-system,sans-serif" font-size="9" fill="${escapeXml(resolved.text)}">${escapeXml(label)}</text>`,
     );
   }
 
@@ -280,13 +340,17 @@ export function renderSVG(
     for (let d = 0; d < 7; d++) {
       const dateStr = addDays(gridStart, w * 7 + d);
       if (dateStr > gridEnd) continue;
-      const count = counts[dateStr] ?? 0;
+      const count = visibleCounts[dateStr] ?? 0;
       const level = colorLevel(count, nonzero);
-      const fill = level === 0 ? resolved.empty : resolved.levels[level - 1];
+      // levels[0..4] maps to level 1..5; fall back to empty color if out of range.
+      const fill = level === 0 ? resolved.empty : (resolved.levels[level - 1] ?? resolved.empty);
       const x = leftPad + w * step;
       const y = topPad + d * step;
-      const tooltipLabel = count > 0 ? `${count} vote${count === 1 ? "" : "s"} on ${dateStr}` : `No votes on ${dateStr}`;
-      parts.push(rect(x, y, cellSize, fill!, radius, tooltipLabel));
+      const tooltipLabel =
+        count > 0
+          ? `${String(count)} vote${count === 1 ? "" : "s"} on ${dateStr}`
+          : `No votes on ${dateStr}`;
+      parts.push(rect(x, y, cellSize, fill, radius, tooltipLabel));
     }
   }
 
@@ -294,7 +358,7 @@ export function renderSVG(
   const legendY = topPad + gridH + 8;
   const legendX = leftPad;
   parts.push(
-    `<text x="${legendX}" y="${legendY + 9}" font-family="system-ui,-apple-system,sans-serif" font-size="9" fill="${escapeXml(resolved.text)}">Less</text>`,
+    `<text x="${n(legendX)}" y="${n(legendY + 9)}" font-family="system-ui,-apple-system,sans-serif" font-size="9" fill="${escapeXml(resolved.text)}">Less</text>`,
   );
 
   // Empty cell
@@ -302,12 +366,12 @@ export function renderSVG(
 
   // 5 color levels
   for (let i = 0; i < 5; i++) {
-    const fill = resolved.levels[i]!;
+    const fill = resolved.levels[i] ?? resolved.empty;
     parts.push(rect(legendX + 22 + (i + 1) * step, legendY, cellSize, fill, radius));
   }
 
   parts.push(
-    `<text x="${legendX + 22 + 6 * step + 4}" y="${legendY + 9}" font-family="system-ui,-apple-system,sans-serif" font-size="9" fill="${escapeXml(resolved.text)}">More</text>`,
+    `<text x="${n(legendX + 22 + 6 * step + 4)}" y="${n(legendY + 9)}" font-family="system-ui,-apple-system,sans-serif" font-size="9" fill="${escapeXml(resolved.text)}">More</text>`,
   );
 
   parts.push("</svg>");

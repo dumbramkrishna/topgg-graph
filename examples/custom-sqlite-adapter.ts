@@ -5,12 +5,11 @@
  * using the `better-sqlite3` package.
  *
  * Usage:
- *   npm install better-sqlite3 @types/better-sqlite3 topgg-graph
+ *   npm install better-sqlite3 @types/better-sqlite3 @dumbramkrishna/topgg-graph
  */
 
 import Database from "better-sqlite3";
-import type { StorageAdapter } from "topgg-graph";
-import { dateRange } from "topgg-graph";
+import type { StorageAdapter } from "@dumbramkrishna/topgg-graph";
 
 export class SqliteAdapter implements StorageAdapter {
   private readonly db: Database.Database;
@@ -60,7 +59,7 @@ export class SqliteAdapter implements StorageAdapter {
 
 // ---- Example usage --------------------------------------------------------
 
-import { TopggGraph } from "topgg-graph";
+import { TopggGraph } from "@dumbramkrishna/topgg-graph";
 
 const graph = new TopggGraph({
   storage: new SqliteAdapter("./votes.db"),
@@ -73,4 +72,3 @@ await graph.record("2024-03-15", 5);
 // Render the heatmap
 const svg = await graph.render({ theme: "dark" });
 console.log(svg.slice(0, 80) + "…");
-

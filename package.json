@@ -1,5 +1,5 @@
 {
-  "name": "topgg-graph",
+  "name": "@dumbramkrishna/topgg-graph",
   "version": "0.1.0",
   "description": "Vote activity heatmap for your Discord bot's Top.gg votes. Records votes via webhook and renders a themeable SVG/PNG graph.",
   "keywords": [
@@ -24,6 +24,10 @@
     "url": "https://github.com/dumbramkrishna/topgg-graph/issues"
   },
   "homepage": "https://github.com/dumbramkrishna/topgg-graph#readme",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   },

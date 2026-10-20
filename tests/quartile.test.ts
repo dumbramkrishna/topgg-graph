@@ -40,20 +40,22 @@ describe("colorLevel", () => {
     expect(colorLevel(1, nz)).toBe(1);
   });
 
-  it("assigns levels correctly across quartile boundaries", () => {
-    // With 8 values: [1,2,3,4,5,6,7,8]
-    // Q1 boundary index = floor(8*0.25)=2 → value 3
-    // Q2 boundary index = floor(8*0.5)=4  → value 5
-    // Q3 boundary index = floor(8*0.75)=6 → value 7
-    // max = 8
+  it("assigns levels correctly across quintile boundaries", () => {
+    // With 8 values: [1..8], the 20/40/60/80% boundaries are 2, 4, 5, 7.
     const nz = [1, 2, 3, 4, 5, 6, 7, 8];
-    expect(colorLevel(1, nz)).toBe(1); // ≤ Q1(3)
-    expect(colorLevel(3, nz)).toBe(1); // ≤ Q1(3)
-    expect(colorLevel(4, nz)).toBe(2); // ≤ Q2(5)
-    expect(colorLevel(5, nz)).toBe(2); // ≤ Q2(5)
-    expect(colorLevel(6, nz)).toBe(3); // ≤ Q3(7)
-    expect(colorLevel(7, nz)).toBe(3); // ≤ Q3(7)
-    expect(colorLevel(8, nz)).toBe(5); // === max
+    expect(colorLevel(1, nz)).toBe(1);
+    expect(colorLevel(2, nz)).toBe(1);
+    expect(colorLevel(3, nz)).toBe(2);
+    expect(colorLevel(4, nz)).toBe(2);
+    expect(colorLevel(5, nz)).toBe(3);
+    expect(colorLevel(6, nz)).toBe(4);
+    expect(colorLevel(7, nz)).toBe(4);
+    expect(colorLevel(8, nz)).toBe(5);
+  });
+
+  it("uses every level 1–5 for at least five distinct values", () => {
+    const nz = [1, 2, 3, 4, 5];
+    expect(nz.map((count) => colorLevel(count, nz))).toEqual([1, 2, 3, 4, 5]);
   });
 
   it("handles a single-value nonzero list", () => {
@@ -71,4 +73,3 @@ describe("colorLevel", () => {
     expect(colorLevel(-1, [1, 2, 3])).toBe(0);
   });
 });
-

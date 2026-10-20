@@ -9,18 +9,13 @@
  *   - The bot responds to an interaction with the SVG or PNG graph.
  *
  * Usage:
- *   npm install discord.js topgg-graph
+ *   npm install discord.js @dumbramkrishna/topgg-graph
  *   DISCORD_TOKEN=... TOPGG_WEBHOOK_SECRET=... node discordjs.js
  */
 
-import {
-  Client,
-  GatewayIntentBits,
-  AttachmentBuilder,
-  type Interaction,
-} from "discord.js";
+import { Client, GatewayIntentBits, AttachmentBuilder, type Interaction } from "discord.js";
 import http from "node:http";
-import { TopggGraph, JsonFileAdapter } from "topgg-graph";
+import { TopggGraph, JsonFileAdapter } from "@dumbramkrishna/topgg-graph";
 
 const graph = new TopggGraph({
   storage: new JsonFileAdapter("./votes.json"),
@@ -43,9 +38,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-const WEBHOOK_PORT = process.env["WEBHOOK_PORT"]
-  ? Number(process.env["WEBHOOK_PORT"])
-  : 3000;
+const WEBHOOK_PORT = process.env["WEBHOOK_PORT"] ? Number(process.env["WEBHOOK_PORT"]) : 3000;
 
 server.listen(WEBHOOK_PORT, () => {
   console.log(`Webhook server listening on port ${WEBHOOK_PORT}`);
@@ -78,4 +71,3 @@ client.on("interactionCreate", async (interaction: Interaction) => {
 });
 
 void client.login(process.env["DISCORD_TOKEN"]);
-

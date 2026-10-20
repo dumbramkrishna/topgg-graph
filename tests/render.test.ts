@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderSVG } from "../src/render.js";
+import { getRenderWindow, renderSVG } from "../src/render.js";
 
 // Fixed "today" for deterministic snapshots
 const TODAY = "2024-03-15";
@@ -33,9 +33,14 @@ describe("renderSVG", () => {
 
   it("includes the total vote count in the title", () => {
     const svg = renderSVG(SAMPLE_COUNTS, { today: TODAY });
-    // Sum of sample counts
-    const total = Object.values(SAMPLE_COUNTS).reduce((s, v) => s + v, 0);
-    expect(svg).toContain(String(total));
+    const total = Object.values(SAMPLE_COUNTS).reduce((sum, value) => sum + value, 0);
+    expect(svg).toContain(`${total.toLocaleString("en-US")} total`);
+  });
+
+  it("ignores counts outside the displayed window in the title and colors", () => {
+    const svg = renderSVG({ "2020-01-01": 999, "2024-03-15": 1 }, { today: TODAY, weeks: 52 });
+    expect(svg).toContain("1 total");
+    expect(svg).not.toContain("1,000 total");
   });
 
   it("escapes special characters in custom title", () => {
@@ -67,6 +72,22 @@ describe("renderSVG", () => {
     expect(svg).toContain("#2222ff");
   });
 
+  it("uses the custom theme empty-cell color", () => {
+    const svg = renderSVG(
+      {},
+      {
+        today: TODAY,
+        theme: {
+          background: "#1a1a2e",
+          text: "#eaeaea",
+          empty: "#123456",
+          levels: ["#aaaaff", "#8888ff", "#6666ff", "#4444ff", "#2222ff"],
+        },
+      },
+    );
+    expect(svg).toContain("#123456");
+  });
+
   it("renders zero-data grid without errors", () => {
     const svg = renderSVG({}, { today: TODAY });
     expect(svg).toMatch(/<svg /);
@@ -94,6 +115,19 @@ describe("renderSVG", () => {
     expect(svg).toContain("More");
   });
 
+  it("computes an inclusive 52-week window ending on Saturday", () => {
+    expect(getRenderWindow(TODAY, 52)).toEqual({
+      start: "2023-03-19",
+      end: "2024-03-16",
+    });
+  });
+
+  it("rejects invalid weeks and impossible today values", () => {
+    expect(() => renderSVG({}, { weeks: 0 })).toThrow(RangeError);
+    expect(() => renderSVG({}, { weeks: Number.NaN })).toThrow(RangeError);
+    expect(() => renderSVG({}, { today: "2024-02-30" })).toThrow(RangeError);
+  });
+
   it("matches light theme snapshot", () => {
     const svg = renderSVG(SAMPLE_COUNTS, { today: TODAY, theme: "light" });
     expect(svg).toMatchSnapshot();
@@ -104,4 +138,3 @@ describe("renderSVG", () => {
     expect(svg).toMatchSnapshot();
   });
 });
-

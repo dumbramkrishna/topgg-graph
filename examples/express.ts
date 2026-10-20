@@ -5,12 +5,12 @@
  * and exposes a /graph.svg endpoint.
  *
  * Usage:
- *   npm install express topgg-graph
+ *   npm install express @dumbramkrishna/topgg-graph
  *   TOPGG_WEBHOOK_SECRET=your_secret node express.js
  */
 
 import express from "express";
-import { TopggGraph, JsonFileAdapter } from "topgg-graph";
+import { TopggGraph, JsonFileAdapter } from "@dumbramkrishna/topgg-graph";
 
 const app = express();
 
@@ -71,4 +71,3 @@ const PORT = process.env["PORT"] ? Number(process.env["PORT"]) : 3000;
 app.listen(PORT, () => {
   console.log(`Listening on http://localhost:${PORT}`);
 });
-

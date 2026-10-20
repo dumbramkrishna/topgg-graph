@@ -16,9 +16,9 @@
   <text x="72" y="148" font-size="68" font-weight="800" letter-spacing="-2" fill="#f8f6e8">topgg<tspan fill="#ff3366">-graph</tspan></text>
   <text x="74" y="192" font-size="24" fill="#9aa4ad">Your bot's votes, one square a day.</text>
 
-  <rect x="74" y="224" width="236" height="40" rx="10" fill="#252b30" stroke="#343c43"/>
+  <rect x="74" y="224" width="400" height="40" rx="10" fill="#252b30" stroke="#343c43"/>
   <text x="94" y="249" font-size="16" class="mono" fill="#ff3366">$</text>
-  <text x="114" y="249" font-size="16" class="mono" fill="#f8f6e8">npm i topgg-graph</text>
+  <text x="114" y="249" font-size="16" class="mono" fill="#f8f6e8">npm i @dumbramkrishna/topgg-graph</text>
 
   <g>
     <rect x="700" y="78" width="14" height="14" rx="3" fill="#5c2036"/>

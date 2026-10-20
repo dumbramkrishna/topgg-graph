@@ -32,9 +32,15 @@ export class JsonFileAdapter implements StorageAdapter {
   }
 
   async increment(date: string, by = 1): Promise<void> {
-    // Serialize to avoid TOCTOU race
-    this.writeQueue = this.writeQueue.then(() => this._increment(date, by));
-    await this.writeQueue;
+    // Serialize writes to avoid a read-modify-write race, but keep the queue
+    // usable after a failure: the next caller retries instead of inheriting
+    // the previous rejected promise forever.
+    const run = this.writeQueue.then(
+      () => this._increment(date, by),
+      () => this._increment(date, by),
+    );
+    this.writeQueue = run.catch(() => undefined);
+    await run;
   }
 
   private async _increment(date: string, by: number): Promise<void> {
@@ -86,6 +92,9 @@ export class JsonFileAdapter implements StorageAdapter {
 
   private async _write(data: StoreData): Promise<void> {
     const json = JSON.stringify(data, null, 2);
+    // The adapter creates missing parent directories so a first run with
+    // e.g. "./data/votes.json" does not poison the write queue with ENOENT.
+    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
     await fs.writeFile(this.tmpPath, json, "utf8");
     await fs.rename(this.tmpPath, this.filePath);
   }

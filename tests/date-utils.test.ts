@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { utcDateString, parseDateString, nextDateString, dateRange } from "../src/storage/types.js";
 
 describe("utcDateString", () => {
@@ -27,6 +27,14 @@ describe("utcDateString", () => {
   it("pads month and day with leading zeros", () => {
     const ts = Date.UTC(2024, 0, 9); // Jan 9
     expect(utcDateString(ts)).toBe("2024-01-09");
+  });
+
+  it("pads years below 1000 to four digits", () => {
+    expect(utcDateString(Date.UTC(999, 0, 1))).toBe("0999-01-01");
+  });
+
+  it("throws on an invalid timestamp", () => {
+    expect(() => utcDateString(Number.NaN)).toThrow(RangeError);
   });
 
   it("uses Date.now() when no argument is given", () => {
@@ -67,6 +75,16 @@ describe("parseDateString", () => {
 
   it("throws on invalid date values", () => {
     expect(() => parseDateString("2024-13-01")).toThrow();
+  });
+
+  it("throws on impossible calendar dates instead of normalizing them", () => {
+    expect(() => parseDateString("2024-02-30")).toThrow(RangeError);
+    expect(() => parseDateString("2024-04-31")).toThrow(RangeError);
+    expect(() => parseDateString("2023-02-29")).toThrow(RangeError);
+  });
+
+  it("still accepts leap days", () => {
+    expect(parseDateString("2024-02-29").toISOString()).toBe("2024-02-29T00:00:00.000Z");
   });
 });
 
@@ -112,5 +130,9 @@ describe("dateRange", () => {
     const range = dateRange("2024-01-30", "2024-02-02");
     expect(range).toEqual(["2024-01-30", "2024-01-31", "2024-02-01", "2024-02-02"]);
   });
-});
 
+  it("rejects impossible range boundaries", () => {
+    expect(() => dateRange("2024-02-30", "2024-03-02")).toThrow(RangeError);
+    expect(() => dateRange("2024-02-01", "2024-02-30")).toThrow(RangeError);
+  });
+});

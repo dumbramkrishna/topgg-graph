@@ -30,7 +30,10 @@ export interface StorageAdapter {
  */
 export function utcDateString(ts?: number): string {
   const d = new Date(ts ?? Date.now());
-  const year = d.getUTCFullYear();
+  if (Number.isNaN(d.getTime())) {
+    throw new RangeError(`Invalid timestamp: ${String(ts)}.`);
+  }
+  const year = String(d.getUTCFullYear()).padStart(4, "0");
   const month = String(d.getUTCMonth() + 1).padStart(2, "0");
   const day = String(d.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
@@ -38,14 +41,14 @@ export function utcDateString(ts?: number): string {
 
 /**
  * Parse a YYYY-MM-DD string into a UTC midnight Date.
- * Throws on malformed input.
+ * Throws on malformed or impossible input (e.g. "2024-02-30").
  */
 export function parseDateString(date: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new RangeError(`Invalid date string: "${date}". Expected YYYY-MM-DD.`);
   }
   const d = new Date(`${date}T00:00:00.000Z`);
-  if (isNaN(d.getTime())) {
+  if (Number.isNaN(d.getTime()) || utcDateString(d.getTime()) !== date) {
     throw new RangeError(`Invalid date: "${date}".`);
   }
   return d;
@@ -64,6 +67,9 @@ export function nextDateString(date: string): string {
  * Return every YYYY-MM-DD string in the inclusive range [from, to].
  */
 export function dateRange(from: string, to: string): string[] {
+  parseDateString(from);
+  parseDateString(to);
+
   const dates: string[] = [];
   let cur = from;
   while (cur <= to) {
@@ -72,4 +78,3 @@ export function dateRange(from: string, to: string): string[] {
   }
   return dates;
 }
-
