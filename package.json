@@ -1,0 +1,82 @@
+{
+  "name": "topgg-graph",
+  "version": "0.1.0",
+  "description": "Vote activity heatmap for your Discord bot's Top.gg votes. Records votes via webhook and renders a themeable SVG/PNG graph.",
+  "keywords": [
+    "topgg",
+    "top.gg",
+    "discord",
+    "discord-bot",
+    "votes",
+    "vote-graph",
+    "activity-graph",
+    "heatmap",
+    "svg",
+    "discord.js"
+  ],
+  "license": "MIT",
+  "author": "dumbramkrishna",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dumbramkrishna/topgg-graph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dumbramkrishna/topgg-graph/issues"
+  },
+  "homepage": "https://github.com/dumbramkrishna/topgg-graph#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run test && npm run build"
+  },
+  "peerDependencies": {
+    "@resvg/resvg-js": "^2.6.0"
+  },
+  "peerDependenciesMeta": {
+    "@resvg/resvg-js": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
+  }
+}
